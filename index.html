@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advertisers</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <style>
+        td.wrap-text {
+            word-wrap: break-word;
+            white-space: normal;
+        }
+
+        th {
+            background: #f8f9fa;
+            position: sticky;
+            top: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="action-container" class="container-fluid mb-5 px-0">
+        <h2 class="mb-4">Action Tracking</h2>
+        <table id="actions-table" class="table table-striped table-responsive" style="height: 500px; overflow-y: auto">
+            <thead>
+                <tr>
+                    <th>Session</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="advertiser-container" class="container-fluid mb-5 px-0">
+        <h2 class="mb-4">Advertisers</h2>
+        <table id="advertisers-table" class="table table-striped table-responsive"
+            style="height: 500px; overflow-y: auto">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Image</th>
+                    <th>Country</th>
+                    <th>Description</th>
+                    <th>Deeplink</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Function to generate a unique ID
+        function generateUniqueId() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+                var r = Math.random() * 16 | 0,
+                    v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Function to set a unique ID in local storage
+        function setUniqueId() {
+            const uniqueId = localStorage.getItem('uniqueId');
+            if (!uniqueId) {
+                localStorage.setItem('uniqueId', generateUniqueId());
+            }
+        }
+
+        // Set unique ID for the user
+        setUniqueId();
+
+        // Function to fetch and render advertisers data
+        function fetchAndRenderAdvertisers() {
+            fetch('http://localhost:3001/api/advertiser/list')
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.querySelector('#advertisers-table tbody');
+                    // Clear existing rows
+                    tableBody.innerHTML = '';
+                    // Iterate through the data and create table rows
+                    data.forEach(advertiser => {
+                        const row = `
+                        <tr id="${advertiser._id}">
+                            <td style="width: 5%;">${advertiser.id}</td>
+                            <td style="width: 15%;">
+                                <a target="_blank" href="${advertiser.domainUrl}">
+                                    <h5>${advertiser.name}</h5>
+                                </a>
+                            </td>
+                            <td style="width: 10%;">
+                                <img src="${advertiser.imageUrl}" alt="Img" style="max-width: 100%;"> 
+                            </td>
+                            <td style="width: 10%;">${advertiser.country}</td>
+                            <td style="width: 25%;" class="wrap-text">${advertiser.description}</td>
+                            <td style="width: 15%;">
+                                <a class="deeplink" href="${advertiser.deeplinkURL}">${advertiser.deeplinkURL}</a>
+                            </td>
+                        </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+
+                    // Add click event listener to deeplink anchors
+                    const deeplinks = document.querySelectorAll('.deeplink');
+                    deeplinks.forEach(deeplink => {
+                        deeplink.addEventListener('click', function (event) {
+                            // Prevent default link behavior
+                            event.preventDefault();
+                            // Retrieve unique ID from local storage
+                            const uniqueId = localStorage.getItem('uniqueId');
+                            // Get the advertiserId from the closest tr's id attribute
+                            const advertiserId = this.closest('tr').id;
+                            // Log the deeplink click event along with the unique ID and advertiserId
+                            console.log('User', uniqueId, 'clicked on deeplink:', this.href, 'advertiserId:', advertiserId);
+
+                            // Open the link in a new tab
+                            window.open(this.href, '_blank');
+
+                            // Send the action to the server
+                            fetch('http://localhost:3001/api/action', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    userId: uniqueId,
+                                    action: 'click',
+                                    advertiserId: advertiserId,
+                                    created: new Date().toISOString()
+                                })
+                            }).then(response => response.json())
+                                .then(data => {
+                                    console.log('Action logged:', data);
+                                    // Fetch and render updated actions
+                                    fetchAndRenderActions();
+                                })
+                                .catch(error => console.error('Error logging action:', error));
+                        });
+                    });
+                })
+                .catch(error => console.error('Error fetching advertisers:', error));
+        }
+
+
+        // Function to fetch and render actions data
+        function fetchAndRenderActions() {
+            fetch('http://localhost:3001/api/action/list')
+                .then(response => response.json())
+                .then(data => {
+                    const tableBody = document.querySelector('#actions-table tbody');
+                    tableBody.innerHTML = ''; // Clear existing rows
+                    // Iterate through the data and create table rows
+                    data.forEach(action => {
+                        const row = `
+                        <tr>
+                            <td>${action.userId}</td>
+                            <td>${action.action}</td>
+                            <td>
+                                <div>
+                                    <a target="_blank" href="${action.advertiser.domainUrl}">
+                                        <h5>${action.advertiser.name}</h5>
+                                        <img src="${action.advertiser.imageUrl}" alt="Img" style="max-width: 100%;"> 
+                                    </a>
+                                </div>
+                                <div>
+                                    <a class="deeplink" target="_blank" href="${action.advertiser.deeplinkURL}">
+                                        ${action.advertiser.deeplinkURL}
+                                    </a>
+                                </div>
+                            </td>
+                            <td>${new Date(action.created).toLocaleString()}</td>
+                        </tr>
+                        `;
+                        tableBody.insertAdjacentHTML('beforeend', row);
+                    });
+                })
+                .catch(error => console.error('Error fetching actions:', error));
+        }
+
+        // Initial fetch and render
+        fetchAndRenderAdvertisers();
+        fetchAndRenderActions();
+    </script>
+</body>
+
+</html>
